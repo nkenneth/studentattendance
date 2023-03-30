@@ -3,36 +3,12 @@ from flask_mysqldb import MySQL
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 import sqlite3
-# conn = sqlite3.connect('UniNorthwest.db')
-# c = conn.cursor()
-
-# # create the students table with the specified columns
-# c.execute('''CREATE TABLE students
-#              (Id INTEGER PRIMARY KEY,
-#               name TEXT,
-#               gender id,
-#               email TEXT,
-#               phone TEXT,
-#               creationDate DATETIME)''')
-
-# # commit the changes and close the connection
-# conn.commit()
-# conn.close()
-
 
 app = Flask(__name__)
 app.config['MYSQL_HOST'] = 'localhost'
 app.config['MYSQL_USER'] = 'root'
 app.config['MYSQL_PASSWORD'] = 'my1T@dmin123'
 app.config['MYSQL_DB'] = 'studentsattendance'
-# app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///UniNorthwest.db'
-#db = SQLAlchemy(app)
-
-# class students(db.Model):
-#     id = db.Column(db.Integer, primary_key=True)
-#     name = db.Column(db.String(50))
-#     gender = db.Column(db.Integer)
-#     email = db.Column(db.String(10))
 
 @app.route('/allstudents', methods=['GET'])
 def get_all_students():
@@ -161,6 +137,74 @@ def get_modulebytutor(tutor_id):
     
     tutor_dict["Modules"] = module_list
     return jsonify(tutor_dict)
+
+#Restrict lessons data to current semester
+@app.route('/lessonBySemester/<int:inprogress>', methods=['GET'])
+def get_coursesByStatus(inprogress):
+    cur = mysql.connection.cursor()
+    cur.execute("SELECT * from course where semester = %s", (inprogress,))
+    rows = cur.fetchall()
+    if not rows:
+          return jsonify({'message': 'No record found'}), 404
+    else:
+        courses = []
+        for row in rows:
+            course = {
+            'course_code': row[0],
+            'course_title': row[1],
+            'course_description': row[2],
+            'course_level': row[3],
+            'course_credit': row[4],
+            'semester': row[5]
+            }
+            courses.append(course)
+        return {'courses': courses}, 200
+
+#API for bulk attendance upload
+@app.route('/bulk_attendance_upload', methods=['POST'])
+def bulk_attendance_upload():
+    try:
+        # Get the JSON data from the request
+        data = request.json
+
+        # Get a cursor
+        cursor = mysql.connection.cursor()
+
+        # Insert the new timetable event
+        cursor.execute("""
+            INSERT INTO timetable_event
+            (timetable_event_day, timetable_event_description, timetable_event_timestart,
+            timetable_event_duration, timetable_event_room, module_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (data['timetable_event_day'], data['timetable_event_description'],
+              data['timetable_event_timestart'], data['timetable_event_duration'],
+              data['timetable_event_room'], data['module_id']))
+        timetable_event_id = cursor.lastrowid
+
+        # Insert the attendance records
+        for attendance_data in data['attendance']:
+            cursor.execute("""
+                INSERT INTO attendance
+                (attendance_date, timetable_event_id, student_id, attendance_code)
+                VALUES (%s, %s, %s, %s)
+            """, (attendance_data['attendance_date'], timetable_event_id,
+                  attendance_data['student_id'], attendance_data['attendance_code']))
+        # Commit the changes and close the cursor
+        # Check if attendance code is valid
+        attendance_code = attendance_data['attendance_code']
+        if attendance_code not in ['A', 'O', 'P', 'N', 'C']:
+                return jsonify({'message': 'Invalid attendance code'}), 400
+        mysql.connection.commit()
+        cursor.close()
+
+        # Return a success response
+        return {'message': 'Bulk attendance upload successful.'}, 200
+    except Exception as e:
+        # If there was an error, rollback the transaction and close the cursor
+        mysql.connection.rollback()
+        cursor.close()
+        # Return an error response
+        return {'message': 'Bulk attendance upload failed.', 'error': str(e)}, 500
 
 
 
