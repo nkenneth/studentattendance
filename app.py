@@ -3,8 +3,8 @@ from flask_mysqldb import MySQL
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 import sqlite3
-conn = sqlite3.connect('UniNorthwest.db')
-c = conn.cursor()
+# conn = sqlite3.connect('UniNorthwest.db')
+# c = conn.cursor()
 
 # # create the students table with the specified columns
 # c.execute('''CREATE TABLE students
@@ -24,15 +24,15 @@ app = Flask(__name__)
 app.config['MYSQL_HOST'] = 'localhost'
 app.config['MYSQL_USER'] = 'root'
 app.config['MYSQL_PASSWORD'] = 'my1T@dmin123'
-app.config['MYSQL_DB'] = 'UniNorthwest'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///UniNorthwest.db'
-db = SQLAlchemy(app)
+app.config['MYSQL_DB'] = 'studentsattendance'
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///UniNorthwest.db'
+#db = SQLAlchemy(app)
 
-class students(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50))
-    gender = db.Column(db.Integer)
-    email = db.Column(db.String(10))
+# class students(db.Model):
+#     id = db.Column(db.Integer, primary_key=True)
+#     name = db.Column(db.String(50))
+#     gender = db.Column(db.Integer)
+#     email = db.Column(db.String(10))
 
 @app.route('/allstudents', methods=['GET'])
 def get_all_students():
@@ -54,20 +54,121 @@ mysql = MySQL(app)
 @app.route('/students')
 def get_students():
     cur = mysql.connection.cursor()
-    cur.execute("SELECT * FROM Students")
+    cur.execute("SELECT student.student_id, student.student_forename, student.student_surname, student.student_email, student.student_category, student.CreationDate, CONCAT(address.address_number, ', ', address.address_firstline, ' ', address.address_town, ' ', address.address_postcode, ' ', address.address_country) FROM student INNER JOIN address ON student.student_id = address.student_id;")
     rows = cur.fetchall()
     students = []
     for row in rows:
         student = {
-            'Id': row[0],
-            'Name': row[1],
-            'Gender': row[2],
-            'Email': row[3],
-            'Phone': row[4],
-            'CreationDate': row[5]
+            'student_id': row[0],
+            'student_forename': row[1],
+            'student_surname': row[2],
+            'student_email': row[3],
+            'student_category': row[4],
+            'creation_date': row[5],
+            'student_address': row[6],
+
         }
         students.append(student)
     return {'students': students}, 200
+
+
+
+# Get student data enrolled in each module returning students per modules
+@app.route('/modulestudents/<int:module_id>', methods=['GET'])
+def get_modulestudents(module_id):
+    cur = mysql.connection.cursor()
+    cur.execute("select module.module_id, module.module_title, module.module_description, module.module_level, student.student_forename, student.student_surname from module inner join enrolment on enrolment.module_id = module.module_id inner join student on student.student_id = enrolment.student_id where module.module_id=%s", (module_id,))
+    rows = cur.fetchall()
+    if not rows:
+          return jsonify({'message': 'No record found'}), 404
+    else:
+        modules = []
+        for row in rows:
+            module = {
+                'module_id': row[0],
+                'module_title': row[1],
+                'module_description': row[2],
+                'module_level': row[3],
+                'student_forename' : row[4],
+                'student_surname' : row[5]
+            }
+            modules.append(module)
+        return {'modules': modules}, 200
+
+# Get student data enrolled in each module. This returns module and list of students
+@app.route('/module/<int:module_id>', methods=['GET'])
+def get_module_info(module_id):
+    cur = mysql.connection.cursor()
+    module_query = "SELECT * FROM module WHERE module_id = %s"
+    cur.execute(module_query, (module_id,))
+    module_row = cur.fetchone()
+    if not module_row:
+        return jsonify({'message': 'No record found'}), 404
+    else:
+        module_dict = {
+        "module_id": module_row[0],
+        "module_title": module_row[1],
+        "module_description": module_row[2],
+        "module_level": module_row[3]
+        }
+    student_query = "SELECT student_forename, student_surname FROM enrolment INNER JOIN student ON enrolment.student_id = student.student_id WHERE enrolment.module_id = %s"
+    cur.execute(student_query, (module_id,))
+    rows = cur.fetchall()
+    if not rows:
+          return jsonify({'message': 'No record found'}), 404
+    else:
+     student_list = []
+    for row in rows:
+        student_dict = {
+            "student_forename": row[0],
+            "student_surname": row[1]
+        }
+        student_list.append(student_dict)
+    module_dict["students"] = student_list
+    return jsonify(module_dict)
+
+# Get student data enrolled in each module. This returns module and list of students
+@app.route('/modulebytutor/<int:tutor_id>', methods=['GET'])
+def get_modulebytutor(tutor_id):
+    cur = mysql.connection.cursor()
+    #module_query = "SELECT * FROM module WHERE tutor_id = %s"
+    module_query = " select module.module_id, module.module_title, module.module_description, module.module_level, module.module_credits, module.course_code from module inner join tutor on module.tutorId = tutor.tutorId where module.tutorId= %s"
+    cur.execute(module_query, (tutor_id,))
+    rows = cur.fetchall()
+    if not rows:
+          return jsonify({'message': 'No record found'}), 404
+    else:
+        module_list = []
+    for row in rows:
+        module_dict = {
+            "module_id": row[0],
+            "module_title": row[1],
+            "module_description": row[2],
+            "module_level": row[3], 
+            "module_credits": row[4], 
+            "course_code": row[5]
+        }
+        module_list.append(module_dict)
+
+    tutor_query = "SELECT * FROM TUTOR WHERE tutorid = %s"
+    cur.execute(tutor_query, (tutor_id,))
+    tutor_row = cur.fetchone()
+    cur.close()
+    tutor_dict = {
+        "tutorId": tutor_row[0],
+        "tutorName": tutor_row[1]
+    }
+    
+    tutor_dict["Modules"] = module_list
+    return jsonify(tutor_dict)
+
+
+
+
+
+
+
+
 
 # Api for adding students
 from flask import request
@@ -282,5 +383,4 @@ def bulk_insert_studentattendance():
 #         }
 #         modules.append(module)
 #     return {'modules': modules}
-
 
