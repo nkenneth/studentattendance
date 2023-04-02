@@ -5,10 +5,21 @@ from flask_sqlalchemy import SQLAlchemy
 import sqlite3
 
 app = Flask(__name__)
-app.config['MYSQL_HOST'] = 'localhost'
-app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = 'my1T@dmin123'
+#Local connection
+# app.config['MYSQL_HOST'] = 'localhost'
+# app.config['MYSQL_USER'] = 'root'
+# app.config['MYSQL_PASSWORD'] = 'my1T@dmin123'
+# app.config['MYSQL_DB'] = 'studentsattendance'
+#End local connection
+
+#AWS connection
+app.config['MYSQL_HOST'] = 'studentsattendance.chctecotmcfw.us-east-1.rds.amazonaws.com'
+app.config['MYSQL_USER'] = 'admin'
+app.config['MYSQL_PASSWORD'] = 'My1tadmin123'
 app.config['MYSQL_DB'] = 'studentsattendance'
+#End local connection
+
+
 
 @app.route('/allstudents', methods=['GET'])
 def get_all_students():
