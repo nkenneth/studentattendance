@@ -68,17 +68,8 @@ def get_token():
 
 # function to authenticate user with username and password
 def authenticate_user(username, password):
-    # establish a connection to the MySQL database
-    # conn = mysql.connector.connect(
-    #     host="studentsattendance.chctecotmcfw.us-east-1.rds.amazonaws.com",
-    #     user="admin",
-    #     password="My1tadmin123",
-    #     database="studentsattendance"
-    # )
-
     cur = mysql.connection.cursor()
     # create a cursor object to execute SQL queries
-    # cursor = conn.cursor()
     # execute the SQL query to retrieve user information
     query = "SELECT * FROM users WHERE username = %s AND encrypted_password = %s"
     mypass = jwt.encode({'password': password}, 'my-secret-key', algorithm='HS256')
@@ -153,7 +144,6 @@ def get_all_students():
 
 
 # API for getting students 
-
 mysql = MySQL(app)
 @app.route('/students')
 def get_students():
@@ -163,6 +153,7 @@ def get_students():
             # decode the token and get the username from the payload
             payload = jwt.decode(token, 'my-secret-key', algorithms=['HS256'])
             cur = mysql.connection.cursor()
+            # Fetch student data from the database
             cur.execute("SELECT student.student_id, student.student_forename, student.student_surname, student.student_email, student.student_category, student.CreationDate, CONCAT(address.address_number, ', ', address.address_firstline, ' ', address.address_town, ' ', address.address_postcode, ' ', address.address_country) FROM student INNER JOIN address ON student.student_id = address.student_id;")
             rows = cur.fetchall()
             students = []
@@ -439,7 +430,7 @@ def update_student(id):
 @app.route('/students/<int:id>', methods=['DELETE'])
 def delete_tutor(id):
     cur = mysql.connection.cursor()
-    cur.execute("DELETE FROM students WHERE id=%s", (id,))
+    cur.execute("DELETE FROM student WHERE student_id=%s", (id,))
     mysql.connection.commit()
     cur.close()
     return jsonify({'message': 'Student deleted successfully'})
@@ -639,7 +630,7 @@ def add_attendance():
     val = (data['course_code'], data['code'])
     cur.execute(sql, val)
     check_in_code = cur.fetchone()
-    attendance_code = data['code']
+    attendance_code = data['attendance_code']
     if attendance_code not in ['P']:
         return jsonify({'error': 'Invalid attendance code'}), 400
 
